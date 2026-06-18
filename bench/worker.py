@@ -58,8 +58,9 @@ def main() -> int:
                              category=p.category, trial=t, phase="timed", **common)
                 f.write(json.dumps(result_to_dict(r)) + "\n")
                 f.flush()
+                ttft = r.ttft_s if r.ttft_s is not None else -1
                 print(f"[{a.model_key}] {p.id} t{t}: {r.throughput_tps:6.1f} tok/s  "
-                      f"ttft={r.ttft_s or -1:.2f}s  steps={r.denoising_steps}", flush=True)
+                      f"ttft={ttft:.2f}s  steps={r.denoising_steps}", flush=True)
     return 0
 
 

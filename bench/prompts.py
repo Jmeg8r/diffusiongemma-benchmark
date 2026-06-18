@@ -35,11 +35,22 @@ class Prompt:
             raise ValueError(f"{self.id}: bad category {self.category!r}")
         if self.scoring not in VALID_SCORING:
             raise ValueError(f"{self.id}: bad scoring {self.scoring!r}")
+        # Scoring-specific shape checks so a bad prompt fails at load, not mid-run.
+        if self.scoring == "code" and not (
+                isinstance(self.gold, dict) and isinstance(self.gold.get("tests"), str)):
+            raise ValueError(f"{self.id}: code prompts require gold.tests (string)")
+        if self.scoring == "numeric" and self.gold is None:
+            raise ValueError(f"{self.id}: numeric prompts require a gold answer")
+        if self.scoring == "programmatic" and not (isinstance(self.checks, dict) and self.checks):
+            raise ValueError(f"{self.id}: programmatic prompts require non-empty checks")
 
 
 def load_prompts(path: Path = PROMPTS_FILE) -> list[Prompt]:
-    data = yaml.safe_load(Path(path).read_text())
-    prompts = [Prompt(**p) for p in data["prompts"]]
+    data = yaml.safe_load(Path(path).read_text()) or {}
+    raw = data.get("prompts")
+    if not isinstance(raw, list):
+        raise ValueError("prompts.yaml must contain a top-level 'prompts' list")
+    prompts = [Prompt(**p) for p in raw]
     ids = [p.id for p in prompts]
     if len(ids) != len(set(ids)):
         raise ValueError("duplicate prompt ids in prompts.yaml")

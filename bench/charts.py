@@ -31,9 +31,12 @@ def _annotate_bars(ax, bars, fmt="{:.0f}"):
 
 
 def chart_throughput(agg: dict, out: Path, title: str) -> Path:
-    labels = list(agg.keys())
-    means = [agg[l]["throughput_tps"]["mean"] or 0 for l in labels]
-    errs = [agg[l]["throughput_tps"]["std"] or 0 for l in labels]
+    # Skip models with no measurement rather than drawing a misleading zero bar.
+    rows = [(label, agg[label]["throughput_tps"]) for label in agg
+            if agg[label]["throughput_tps"]["mean"] is not None]
+    labels = [label for label, _ in rows]
+    means = [m["mean"] for _, m in rows]
+    errs = [m["std"] or 0 for _, m in rows]
     fig, ax = plt.subplots(figsize=(7, 4.5))
     bars = ax.bar(labels, means, yerr=errs, capsize=5,
                   color=[_model_color(l) for l in labels])
@@ -65,9 +68,11 @@ def chart_reported_vs_measured(measured_diffusion_tps: float, reported: dict,
 
 
 def chart_ttft(agg: dict, out: Path, title: str) -> Path:
-    labels = list(agg.keys())
-    means = [(agg[l]["ttft_s"]["mean"] or 0) for l in labels]
-    errs = [(agg[l]["ttft_s"]["std"] or 0) for l in labels]
+    rows = [(label, agg[label]["ttft_s"]) for label in agg
+            if agg[label]["ttft_s"]["mean"] is not None]
+    labels = [label for label, _ in rows]
+    means = [m["mean"] for _, m in rows]
+    errs = [m["std"] or 0 for _, m in rows]
     fig, ax = plt.subplots(figsize=(7, 4.5))
     bars = ax.bar(labels, means, yerr=errs, capsize=5,
                   color=[_model_color(l) for l in labels])

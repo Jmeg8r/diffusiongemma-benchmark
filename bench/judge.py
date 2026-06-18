@@ -2,8 +2,9 @@
 
 Four scoring strategies, chosen per prompt so the objective categories never
 depend on a subjective judge:
-  - code:        run the generated function against asserts in a sandboxed
-                 subprocess (pass/fail). Fully objective.
+  - code:        run the generated function against asserts in an isolated
+                 subprocess (python -I, stripped env; best-effort, NOT a true
+                 OS sandbox). Fully objective.
   - numeric:     extract the answer and compare to gold (pass/fail). Objective.
   - programmatic: IFEval-style deterministic checks (length/format/keywords).
   - judge:       blind pairwise LLM-as-judge via the local `claude` CLI, 1-5.
@@ -12,6 +13,7 @@ Only the `writing` category uses the LLM judge; everything else is deterministic
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
@@ -64,6 +66,12 @@ def _num_equal(a: str, b: Any) -> bool:
 
 
 # --- objective scorers -------------------------------------------------------
+def _sandbox_env() -> dict:
+    """Minimal env for running generated code so it can't read inherited
+    secrets (API keys, tokens). Best-effort, not a full OS sandbox."""
+    return {k: os.environ[k] for k in ("PATH", "TMPDIR") if k in os.environ}
+
+
 def score_code(output_text: str, gold: dict) -> dict:
     """Execute generated code + asserts in a subprocess; pass iff exit code 0."""
     code = extract_code(output_text)
@@ -74,8 +82,9 @@ def score_code(output_text: str, gold: dict) -> dict:
         f.write_text(program)
         try:
             proc = subprocess.run(
-                [sys.executable, str(f)],
+                [sys.executable, "-I", str(f)],   # -I: isolated mode, ignores env/user-site
                 capture_output=True, text=True, timeout=CODE_TIMEOUT_S, cwd=d,
+                env=_sandbox_env(),
             )
             passed = proc.returncode == 0
             return {"passed": passed, "score": 1.0 if passed else 0.0,
@@ -178,7 +187,9 @@ def judge_pairwise(prompt_text: str, out_a: str, out_b: str, rubric: str = "",
 def score_writing(prompt_text: str, out_diffusion: str, out_ar: str, rubric: str = "",
                   judge_cli: str = "claude") -> dict:
     """Blind, order-randomized pairwise judging. Maps A/B scores back to models."""
-    rng = random.Random(SEED + hash(prompt_text) % 10_000)
+    # Stable hash (Python's built-in hash() is salted per process -> not reproducible).
+    stable = int(hashlib.sha256(prompt_text.encode("utf-8")).hexdigest()[:8], 16)
+    rng = random.Random(SEED + stable % 10_000)
     diffusion_is_a = rng.random() < 0.5
     out_a, out_b = (out_diffusion, out_ar) if diffusion_is_a else (out_ar, out_diffusion)
     verdict = judge_pairwise(prompt_text, out_a, out_b, rubric, judge_cli)

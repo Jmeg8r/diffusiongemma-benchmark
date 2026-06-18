@@ -72,8 +72,8 @@ snapshot_download('mlx-community/gemma-4-26b-a4b-it-8bit')"
 
 ## Methodology notes
 
-- Each model loads once; 2 warmup runs (discarded) then ≥5 timed trials; results
-  are mean ± std.
+- Each worker subprocess loads one model instance, runs 1 warmup generation
+  (discarded), then its timed trials; aggregates across workers are mean ± std.
 - Everything held constant: prompt, `max_tokens` (512), 8-bit quant, machine,
   runner, denoising steps (48, matching Google's model-card eval).
 - **Determinism asymmetry (disclosed):** the AR baseline runs at `temperature=0`;

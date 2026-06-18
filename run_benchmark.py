@@ -63,9 +63,10 @@ def chunks(seq, size):
         yield seq[i:i + size]
 
 
-def run_workers(run_dir: Path, raw_path: Path, prompts, trials: int, max_tokens: int):
+def run_workers(run_dir: Path, raw_path: Path, prompts, trials: int, max_tokens: int) -> list[tuple]:
     ppw = max(1, GEN_BUDGET_PER_WORKER // max(1, trials))
     env = dict(os.environ)
+    failures: list[tuple] = []
     for key in config.MODELS:                      # all of one model before the next
         for chunk in chunks(prompts, ppw):
             ids = ",".join(p.id for p in chunk)
@@ -76,8 +77,9 @@ def run_workers(run_dir: Path, raw_path: Path, prompts, trials: int, max_tokens:
             log.info("worker: %s [%s]", key, ids)
             proc = subprocess.run(cmd, cwd=str(config.PROJECT_ROOT), env=env)
             if proc.returncode != 0:
-                log.warning("worker failed (rc=%d) for %s [%s] — continuing",
-                            proc.returncode, key, ids)
+                failures.append((key, ids, proc.returncode))
+                log.error("worker failed (rc=%d) for %s [%s]", proc.returncode, key, ids)
+    return failures
 
 
 def load_rows(raw_path: Path) -> list[dict]:
@@ -115,7 +117,12 @@ def main() -> int:
     prompts = select_prompts(load_prompts(), args.limit_per_category)
     log.info("prompts: %d  trials: %d  max_tokens: %d", len(prompts), args.trials, args.max_tokens)
 
-    run_workers(run_dir, raw_path, prompts, args.trials, args.max_tokens)
+    failures = run_workers(run_dir, raw_path, prompts, args.trials, args.max_tokens)
+    if failures:
+        # WHY: aggregating a partial raw.jsonl would silently bias every reported
+        # metric. Fail loudly instead of publishing skewed numbers.
+        raise RuntimeError(
+            f"{len(failures)} worker(s) failed; aborting to avoid partial benchmark metrics.")
 
     rows = load_rows(raw_path)
     rep = build_rep(rows)

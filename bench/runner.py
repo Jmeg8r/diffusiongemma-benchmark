@@ -140,8 +140,10 @@ def run_once(
                     ttft = time.perf_counter() - t0
                 parts.append(delta)
     except TypeError:
-        # WHY: if seed/sampler kwargs aren't accepted for this build, retry minimal.
-        kwargs.pop("seed", None)
+        # WHY: if seed/sampler/step kwargs aren't accepted for this build, drop ALL
+        # the optional ones (any of them could be the unsupported kwarg) and retry.
+        for k in ("seed", "diffusion_sampler", "max_denoising_steps"):
+            kwargs.pop(k, None)
         t0 = time.perf_counter()
         parts, last, ttft = [], None, None
         for chunk in stream_generate(model, processor, prompt, **kwargs):
@@ -164,6 +166,7 @@ def run_once(
     text = "".join(parts)
     g = lambda name, default=None: getattr(last, name, default) if last is not None else default
 
+    prompt_tokens = int(g("prompt_tokens", 0) or 0)
     gen_tokens = int(g("generation_tokens", 0) or 0)
     if gen_tokens == 0 and text:
         # Fallback: count tokens ourselves if the stream didn't surface counts.
@@ -171,6 +174,10 @@ def run_once(
             gen_tokens = len(processor.tokenizer.encode(text))
         except Exception:
             gen_tokens = 0
+    # Keep total consistent when the gen-token fallback fired (else it stays 0).
+    total_tokens = int(g("total_tokens", 0) or 0)
+    if total_tokens == 0 and (prompt_tokens or gen_tokens):
+        total_tokens = prompt_tokens + gen_tokens
 
     throughput = (gen_tokens / wall) if wall > 0 and gen_tokens else 0.0
 
@@ -187,9 +194,9 @@ def run_once(
         temperature=config.TEMPERATURE,
         sampler=config.DIFFUSION_SAMPLER if kind == "diffusion" else None,
         output_text=text,
-        prompt_tokens=int(g("prompt_tokens", 0) or 0),
+        prompt_tokens=prompt_tokens,
         generation_tokens=gen_tokens,
-        total_tokens=int(g("total_tokens", 0) or 0),
+        total_tokens=total_tokens,
         wall_time_s=wall,
         ttft_s=ttft,
         throughput_tps=throughput,

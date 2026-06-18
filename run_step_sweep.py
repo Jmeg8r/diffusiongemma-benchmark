@@ -77,6 +77,7 @@ def main() -> int:
              out_dir, args.steps, len(prompts), ppw)
 
     env = dict(os.environ)
+    failures: list[tuple] = []
     for steps in args.steps:
         for chunk in chunks(prompts, ppw):
             ids = ",".join(p.id for p in chunk)
@@ -87,13 +88,16 @@ def main() -> int:
             log.info("worker: steps=%d [%s]", steps, ids)
             proc = subprocess.run(cmd, cwd=str(config.PROJECT_ROOT), env=env)
             if proc.returncode != 0:
-                log.warning("sweep worker failed (rc=%d) steps=%d [%s]", proc.returncode, steps, ids)
+                failures.append((steps, ids, proc.returncode))
+                log.error("sweep worker failed (rc=%d) steps=%d [%s]", proc.returncode, steps, ids)
+    if failures:
+        raise RuntimeError(f"{len(failures)} worker(s) failed; aborting sweep to avoid partial metrics.")
 
     rows = [json.loads(l) for l in raw.read_text().splitlines() if l.strip()]
     by_step: dict[int, dict] = {}
     for steps in args.steps:
         srows = [r for r in rows if r["phase"] == "timed" and r["requested_denoising_steps"] == steps]
-        tput = [r["throughput_tps"] for r in srows if r["throughput_tps"]]
+        tput = [r["throughput_tps"] for r in srows if r["throughput_tps"] is not None]
         ttft = [r["ttft_s"] for r in srows if r["ttft_s"] is not None]
         used = [r["denoising_steps"] for r in srows if r["denoising_steps"] is not None]
         rep = {r["prompt_id"]: r["output_text"] for r in srows if r["trial"] == 0}
