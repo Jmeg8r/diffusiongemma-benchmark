@@ -1,0 +1,8 @@
+# Pinned to the versions this benchmark was validated against (Apple Silicon, MLX).
+# Regenerate an exact lock with: .venv/bin/pip freeze > requirements.lock.txt
+mlx-vlm==0.6.3
+mlx==0.31.2
+matplotlib==3.11.0
+pandas==3.0.3
+PyYAML==6.0.3
+python-dotenv==1.2.2

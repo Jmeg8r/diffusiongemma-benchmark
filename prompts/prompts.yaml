@@ -1,0 +1,255 @@
+# Curated benchmark prompt set (30 prompts, 4 categories).
+# scoring: code (exec) | numeric (match) | programmatic (IFEval) | judge (LLM)
+prompts:
+  # ---------------- CODE (8, execution-scored) ----------------
+  - id: code_two_sum
+    category: code
+    scoring: code
+    text: |
+      Write a Python function `two_sum(nums, target)` that returns the indices of the
+      two numbers in `nums` that add up to `target`, as a list `[i, j]` with i < j.
+      Assume exactly one solution. Return only the function in a Python code block.
+    gold:
+      tests: |
+        assert sorted(two_sum([2,7,11,15], 9)) == [0,1]
+        assert sorted(two_sum([3,2,4], 6)) == [1,2]
+        assert sorted(two_sum([3,3], 6)) == [0,1]
+
+  - id: code_is_palindrome
+    category: code
+    scoring: code
+    text: |
+      Write a Python function `is_palindrome(s)` that returns True if the string `s`
+      is a palindrome considering only alphanumeric characters and ignoring case.
+      Return only the function in a Python code block.
+    gold:
+      tests: |
+        assert is_palindrome("A man, a plan, a canal: Panama") is True
+        assert is_palindrome("race a car") is False
+        assert is_palindrome("") is True
+
+  - id: code_fibonacci
+    category: code
+    scoring: code
+    text: |
+      Write a Python function `fib(n)` returning the n-th Fibonacci number with
+      fib(0)=0 and fib(1)=1, computed iteratively. Return only the function in a
+      Python code block.
+    gold:
+      tests: |
+        assert fib(0) == 0
+        assert fib(1) == 1
+        assert fib(10) == 55
+        assert fib(20) == 6765
+
+  - id: code_fizzbuzz
+    category: code
+    scoring: code
+    text: |
+      Write a Python function `fizzbuzz(n)` that returns a list of strings for 1..n:
+      "Fizz" for multiples of 3, "Buzz" for multiples of 5, "FizzBuzz" for both, and
+      the number as a string otherwise. Return only the function in a Python code block.
+    gold:
+      tests: |
+        assert fizzbuzz(5) == ["1","2","Fizz","4","Buzz"]
+        assert fizzbuzz(15)[-1] == "FizzBuzz"
+        assert fizzbuzz(3) == ["1","2","Fizz"]
+
+  - id: code_reverse_words
+    category: code
+    scoring: code
+    text: |
+      Write a Python function `reverse_words(s)` that reverses the order of words in a
+      string, collapsing multiple spaces to one and trimming ends. Return only the
+      function in a Python code block.
+    gold:
+      tests: |
+        assert reverse_words("the sky is blue") == "blue is sky the"
+        assert reverse_words("  hello   world  ") == "world hello"
+
+  - id: code_count_vowels
+    category: code
+    scoring: code
+    text: |
+      Write a Python function `count_vowels(s)` returning the number of vowels
+      (a, e, i, o, u, case-insensitive) in `s`. Return only the function in a code block.
+    gold:
+      tests: |
+        assert count_vowels("hello") == 2
+        assert count_vowels("RHYTHM") == 0
+        assert count_vowels("AeIoU") == 5
+
+  - id: code_gcd
+    category: code
+    scoring: code
+    text: |
+      Write a Python function `gcd(a, b)` returning the greatest common divisor of two
+      positive integers using the Euclidean algorithm. Return only the function in a code block.
+    gold:
+      tests: |
+        assert gcd(48, 18) == 6
+        assert gcd(17, 5) == 1
+        assert gcd(100, 100) == 100
+
+  - id: code_flatten
+    category: code
+    scoring: code
+    text: |
+      Write a Python function `flatten(lst)` that fully flattens an arbitrarily nested
+      list of integers into a single flat list, preserving order. Return only the
+      function in a Python code block.
+    gold:
+      tests: |
+        assert flatten([1, [2, [3, 4], 5]]) == [1,2,3,4,5]
+        assert flatten([]) == []
+        assert flatten([[[1]], 2]) == [1,2]
+
+  # ---------------- MATH (8, numeric match) ----------------
+  - id: math_sum_100
+    category: math
+    scoring: numeric
+    text: "What is the sum of all integers from 1 to 100 inclusive? Give the final number."
+    gold: 5050
+
+  - id: math_mult
+    category: math
+    scoring: numeric
+    text: "Compute 17 multiplied by 23. Give the final number."
+    gold: 391
+
+  - id: math_percent
+    category: math
+    scoring: numeric
+    text: "What is 15 percent of 240? Give the final number."
+    gold: 36
+
+  - id: math_solve_linear
+    category: math
+    scoring: numeric
+    text: "Solve for x: 3x + 7 = 28. Give only the value of x."
+    gold: 7
+
+  - id: math_power
+    category: math
+    scoring: numeric
+    text: "What is 2 raised to the 10th power? Give the final number."
+    gold: 1024
+
+  - id: math_hexagon
+    category: math
+    scoring: numeric
+    text: "What is the sum of the interior angles of a hexagon, in degrees? Give the final number."
+    gold: 720
+
+  - id: math_divisors
+    category: math
+    scoring: numeric
+    text: "How many positive divisors does 36 have? Give the final number."
+    gold: 9
+
+  - id: math_modular
+    category: math
+    scoring: numeric
+    text: "What is the remainder when 2 to the power 20 is divided by 7? Give the final number."
+    gold: 4
+
+  # ---------------- INSTRUCTION-FOLLOWING (7, programmatic) ----------------
+  - id: inst_primary_colors
+    category: instruction
+    scoring: programmatic
+    text: "List the three primary colors. Output at most 3 lines. Mention red, blue, and yellow."
+    checks:
+      max_lines: 3
+      must_include: ["red", "blue", "yellow"]
+
+  - id: inst_json
+    category: instruction
+    scoring: programmatic
+    text: 'Output a single valid JSON object with exactly the keys "name" and "age". No prose.'
+    checks:
+      json_valid: true
+      must_include: ["name", "age"]
+
+  - id: inst_azure
+    category: instruction
+    scoring: programmatic
+    text: "Write one sentence about the ocean that contains the word 'azure' and ends with an exclamation mark."
+    checks:
+      must_include: ["azure"]
+      ends_with: "!"
+      max_lines: 1
+
+  - id: inst_five_fruits
+    category: instruction
+    scoring: programmatic
+    text: "List exactly five fruits, comma-separated, on a single line, with no other text."
+    checks:
+      max_lines: 1
+      regex: "^([^,\\n]+,){4}[^,\\n]+$"
+
+  - id: inst_haiku
+    category: instruction
+    scoring: programmatic
+    text: "Write a haiku about autumn. Exactly three lines."
+    checks:
+      max_lines: 3
+      min_words: 6
+
+  - id: inst_under_30
+    category: instruction
+    scoring: programmatic
+    text: "Explain photosynthesis in under 30 words."
+    checks:
+      max_words: 30
+      min_words: 5
+
+  - id: inst_ack
+    category: instruction
+    scoring: programmatic
+    text: "Reply with the single word ACKNOWLEDGED in all caps and nothing else."
+    checks:
+      must_include: ["ACKNOWLEDGED"]
+      max_words: 2
+
+  # ---------------- WRITING (7, LLM-as-judge) ----------------
+  - id: write_product_desc
+    category: writing
+    scoring: judge
+    text: "Write a 150-word marketing product description for a smart water bottle that tracks hydration."
+    rubric: "Reward persuasive, concrete, well-structured copy near the requested length."
+
+  - id: write_decline_email
+    category: writing
+    scoring: judge
+    text: "Write a short, polite professional email declining a meeting invitation due to a scheduling conflict."
+    rubric: "Reward warmth, professionalism, and offering an alternative."
+
+  - id: write_explain_entanglement
+    category: writing
+    scoring: judge
+    text: "Explain quantum entanglement to a 10-year-old in one clear paragraph."
+    rubric: "Reward accuracy, an age-appropriate analogy, and clarity."
+
+  - id: write_mystery_open
+    category: writing
+    scoring: judge
+    text: "Write the opening paragraph of a mystery novel set in an abandoned lighthouse."
+    rubric: "Reward atmosphere, voice, and a hook."
+
+  - id: write_remote_work
+    category: writing
+    scoring: judge
+    text: "Write a balanced paragraph summarizing the pros and cons of remote work."
+    rubric: "Reward balance, specificity, and coherence."
+
+  - id: write_linkedin
+    category: writing
+    scoring: judge
+    text: "Write a motivational LinkedIn post about the value of learning new skills, under 120 words."
+    rubric: "Reward an authentic tone, a clear takeaway, and appropriate length."
+
+  - id: write_support_reply
+    category: writing
+    scoring: judge
+    text: "Write a polite customer-support reply to a user whose order arrived damaged, offering a resolution."
+    rubric: "Reward empathy, a concrete remedy, and professionalism."
