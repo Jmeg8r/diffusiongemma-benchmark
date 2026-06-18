@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+.DS_Store
+# Raw run data is large/regenerable; the findings.md writeup and charts/ are the
+# committed deliverables.
+results/
+# The polished article draft belongs in the ASTGL/Substack pipeline, not the
+# public repo (avoids duplicate-content indexing ahead of the canonical post).
+article/
