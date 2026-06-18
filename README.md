@@ -87,3 +87,7 @@ bench/        config, runner (mlx-vlm wrapper), metrics, prompts, judge, charts
 prompts/      prompts.yaml — 30 prompts across 4 categories
 run_benchmark.py / run_step_sweep.py / make_charts.py
 ```
+
+## License
+
+MIT — see [LICENSE](LICENSE).
