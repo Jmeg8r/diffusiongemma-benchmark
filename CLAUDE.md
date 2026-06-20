@@ -20,14 +20,16 @@ quality. Public, MIT. Findings in `findings.md`; the article draft in `article/`
 .venv/bin/python run_benchmark.py            # full run (5 trials, blind judge)
 .venv/bin/python make_charts.py              # render charts/*.png
 ```
-Apple-Silicon only (MLX). The writing judge needs `ANTHROPIC_API_KEY` (see `.env.example`).
+Apple-Silicon only (MLX). The writing judge runs through the local `claude` CLI (logged in;
+no API key needed).
 
 ## Gotchas (load-bearing — don't regress)
 - **Subprocess isolation is required.** MLX diffusion throughput collapses (TTFT degrades
   severely) when many generations run in one process; `mx.clear_cache`/`mx.synchronize` do **not**
   fix it. `worker.py` runs one model per subprocess on purpose — keep generations isolated.
 - **Empty `ANTHROPIC_API_KEY`:** Claude Code injects `ANTHROPIC_API_KEY=""` into subprocesses;
-  `judge.py` strips an empty value before invoking the judge. Don't remove that guard.
+  `judge.py` strips an empty value so the local `claude` CLI falls back to subscription auth.
+  Don't remove that guard.
 - **Hold methodology constant** when changing the harness: `max_tokens=512`, 8-bit quant,
   48 denoising steps (matches Google's model-card eval), 1 discarded warmup per worker, mean ± std.
 - **Determinism asymmetry is disclosed, not a bug:** AR baseline runs at `temperature=0`;
