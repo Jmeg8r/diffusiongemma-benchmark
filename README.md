@@ -21,6 +21,23 @@ isolates the one variable that matters.
   long-form writing.
 - **Speed↔quality tradeoff** — a denoising-step sweep (8/16/24/48).
 
+## How a run flows
+
+```mermaid
+flowchart TD
+    Prompts["prompts/prompts.yaml<br/>30 prompts × 4 categories"] --> Runner["bench/runner.py<br/>(mlx-vlm wrapper)"]
+    Runner --> Worker["bench/worker.py<br/>1 model per subprocess<br/>(isolated: avoids MLX Metal accumulation)"]
+    Worker --> DG[DiffusionGemma]
+    Worker --> AR[Autoregressive Gemma 4]
+    DG --> Metrics["bench/metrics.py<br/>throughput · TTFT · steps"]
+    AR --> Metrics
+    Metrics --> Judge["bench/judge.py<br/>blind LLM-as-judge (writing)"]
+    Judge --> Results[("results/run-N<br/>raw.jsonl · results.json · summary.md")]
+    Metrics --> Results
+    Results --> Charts["make_charts.py → charts/*.png"]
+    Results --> Findings[findings.md]
+```
+
 ## Requirements
 
 - Apple Silicon Mac (built/validated on a Mac Studio, 256 GB RAM).
