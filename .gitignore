@@ -9,3 +9,7 @@ results/
 # The polished article draft belongs in the ASTGL/Substack pipeline, not the
 # public repo (avoids duplicate-content indexing ahead of the canonical post).
 article/
+.coderabbit.local.yaml
+.lefthook-local.yml
+.cr-cache/
+*.cr-review.md
