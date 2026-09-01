@@ -25,18 +25,26 @@ isolates the one variable that matters.
 
 ```mermaid
 flowchart TD
-    Prompts["prompts/prompts.yaml<br/>30 prompts × 4 categories"] --> Runner["bench/runner.py<br/>(mlx-vlm wrapper)"]
-    Runner --> Worker["bench/worker.py<br/>1 model per subprocess<br/>(isolated: avoids MLX Metal accumulation)"]
-    Worker --> DG[DiffusionGemma]
-    Worker --> AR[Autoregressive Gemma 4]
-    DG --> Metrics["bench/metrics.py<br/>throughput · TTFT · steps"]
-    AR --> Metrics
-    Metrics --> Judge["bench/judge.py<br/>blind LLM-as-judge (writing)"]
-    Judge --> Results[("results/run-N<br/>raw.jsonl · results.json · summary.md")]
-    Metrics --> Results
+    Prompts["prompts/prompts.yaml<br/>30 prompts × 4 categories"] --> Orch["run_benchmark.py<br/>orchestrator"]
+    Orch -->|subprocess per model| Worker["bench/worker.py<br/>1 model per subprocess<br/>(isolated: avoids MLX Metal accumulation)"]
+    Worker --> Wrap["bench/runner.py<br/>mlx-vlm wrapper: load_model · run_once"]
+    Wrap --> DG[DiffusionGemma]
+    Wrap --> AR[Autoregressive Gemma 4]
+    DG --> Raw[("results/run-N/raw.jsonl")]
+    AR --> Raw
+    Raw --> Orch
+    Orch --> Metrics["bench/metrics.py<br/>throughput · TTFT · steps"]
+    Orch --> Judge["bench/judge.py<br/>4 scoring strategies"]
+    Metrics --> Results[("results/run-N<br/>results.json · summary.md")]
+    Judge --> Results
     Results --> Charts["make_charts.py → charts/*.png"]
     Results --> Findings[findings.md]
 ```
+
+`bench/runner.py` is the low-level mlx-vlm wrapper, imported only by `bench/worker.py` — not the
+orchestrator. `run_benchmark.py` is what reads the prompts, spawns one subprocess per model, and
+then calls `metrics.py` and `judge.py` **independently** on the same rows; neither of those two
+imports the other.
 
 ## Requirements
 
@@ -108,3 +116,14 @@ run_benchmark.py / run_step_sweep.py / make_charts.py
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+<!-- archify:begin -->
+### System map
+
+![System map](docs/diagrams/diffusiongemma-benchmark.architecture.svg)
+
+Interactive: [`docs/diagrams/diffusiongemma-benchmark.architecture.html`](docs/diagrams/diffusiongemma-benchmark.architecture.html)
+— search nodes, trace routes, compare roles. Source of truth is the typed IR
+[`diffusiongemma-benchmark.architecture.json`](docs/diagrams/diffusiongemma-benchmark.architecture.json);
+edit that, never the HTML.
+<!-- archify:end -->
