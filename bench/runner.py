@@ -11,6 +11,7 @@ We use stream_generate so we can stamp TTFT at the first visible token, and read
 the final GenerationResult chunk for token counts, peak memory, and (for
 diffusion) the actual denoising steps used by the entropy-bound sampler.
 """
+
 from __future__ import annotations
 
 import logging
@@ -31,13 +32,14 @@ logger = logging.getLogger("benchmark.runner")
 @dataclass
 class CallResult:
     """One generation. Serialized verbatim to results/<run>/raw.jsonl."""
+
     model_id: str
     model_label: str
-    kind: str                      # "diffusion" | "autoregressive"
+    kind: str  # "diffusion" | "autoregressive"
     category: str
     prompt_id: str
     trial: int
-    phase: str                     # "warmup" | "timed"
+    phase: str  # "warmup" | "timed"
     # request knobs
     requested_max_tokens: int
     requested_denoising_steps: Optional[int]
@@ -51,16 +53,18 @@ class CallResult:
     # timing (our measurement)
     wall_time_s: float
     ttft_s: Optional[float]
-    throughput_tps: float          # generation_tokens / wall_time_s  <-- headline metric
+    throughput_tps: float  # generation_tokens / wall_time_s  <-- headline metric
     # library-reported counters (cross-check)
     prompt_tps: Optional[float] = None
     lib_generation_tps: Optional[float] = None
     diffusion_work_tps: Optional[float] = None
     diffusion_canvas_tps: Optional[float] = None
-    denoising_steps: Optional[int] = None   # ACTUAL steps used (diffusion only)
+    denoising_steps: Optional[int] = None  # ACTUAL steps used (diffusion only)
     peak_memory: Optional[float] = None
     finish_reason: Optional[str] = None
-    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    timestamp: str = field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+    )
 
 
 def load_model(model_id: str):
@@ -80,17 +84,21 @@ def load_model(model_id: str):
 
 def _reset_peak_memory() -> None:
     # WHY: peak_memory is cumulative; reset per call so the number is per-generation.
-    for fn in ("reset_peak_memory",):
-        if hasattr(mx, fn):
-            getattr(mx, fn)()
-            return
+    if hasattr(mx, "reset_peak_memory"):
+        mx.reset_peak_memory()
+        return
     metal = getattr(mx, "metal", None)
     if metal is not None and hasattr(metal, "reset_peak_memory"):
         metal.reset_peak_memory()
 
 
-def _build_kwargs(kind: str, max_tokens: int, denoising_steps: Optional[int]) -> dict[str, Any]:
-    kwargs: dict[str, Any] = {"max_tokens": max_tokens, "temperature": config.TEMPERATURE}
+def _build_kwargs(
+    kind: str, max_tokens: int, denoising_steps: Optional[int]
+) -> dict[str, Any]:
+    kwargs: dict[str, Any] = {
+        "max_tokens": max_tokens,
+        "temperature": config.TEMPERATURE,
+    }
     # seed where supported -> reproducible sampling/diffusion
     kwargs["seed"] = config.SEED
     if kind == "diffusion":
@@ -125,35 +133,37 @@ def run_once(
     prompt = apply_chat_template(processor, chat_config, prompt_text, num_images=0)
 
     _reset_peak_memory()
-    parts: list[str] = []
-    last: Any = None
-    ttft: Optional[float] = None
 
-    t0 = time.perf_counter()
-    try:
-        for chunk in stream_generate(model, processor, prompt, **kwargs):
+    def _stream(
+        kw: dict[str, Any], start: float
+    ) -> tuple[list[str], Any, Optional[float]]:
+        # One stream_generate pass. Returns (text parts, last non-str chunk for the
+        # library counters, TTFT). TTFT is stamped at the first visible token,
+        # measured against `start` so an initial attempt and a kwargs-dropping retry
+        # share the caller's clock; the caller derives wall time from that same stamp.
+        parts: list[str] = []
+        last: Any = None
+        ttft: Optional[float] = None
+        for chunk in stream_generate(model, processor, prompt, **kw):
             delta = getattr(chunk, "text", chunk)
             if not isinstance(chunk, str):
                 last = chunk
             if delta:
                 if ttft is None:
-                    ttft = time.perf_counter() - t0
+                    ttft = time.perf_counter() - start
                 parts.append(delta)
+        return parts, last, ttft
+
+    t0 = time.perf_counter()
+    try:
+        parts, last, ttft = _stream(kwargs, t0)
     except TypeError:
         # WHY: if seed/sampler/step kwargs aren't accepted for this build, drop ALL
         # the optional ones (any of them could be the unsupported kwarg) and retry.
         for k in ("seed", "diffusion_sampler", "max_denoising_steps"):
             kwargs.pop(k, None)
         t0 = time.perf_counter()
-        parts, last, ttft = [], None, None
-        for chunk in stream_generate(model, processor, prompt, **kwargs):
-            delta = getattr(chunk, "text", chunk)
-            if not isinstance(chunk, str):
-                last = chunk
-            if delta:
-                if ttft is None:
-                    ttft = time.perf_counter() - t0
-                parts.append(delta)
+        parts, last, ttft = _stream(kwargs, t0)
     wall = time.perf_counter() - t0
     # WHY: mx.synchronize() drains the Metal command queue and mx.clear_cache()
     # frees buffers between generations. Without the synchronize, undrained GPU
@@ -164,7 +174,9 @@ def run_once(
     mx.clear_cache()
 
     text = "".join(parts)
-    g = lambda name, default=None: getattr(last, name, default) if last is not None else default
+    g = lambda name, default=None: (
+        getattr(last, name, default) if last is not None else default
+    )
 
     prompt_tokens = int(g("prompt_tokens", 0) or 0)
     gen_tokens = int(g("generation_tokens", 0) or 0)

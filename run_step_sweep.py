@@ -9,6 +9,7 @@ bench/worker.py) to avoid the Metal driver-state runaway.
   .venv/bin/python run_step_sweep.py                 # full sweep (3 trials)
   .venv/bin/python run_step_sweep.py --quick         # 1 prompt/category, 1 trial
 """
+
 from __future__ import annotations
 
 import argparse
@@ -17,34 +18,21 @@ import logging
 import os
 import subprocess
 import sys
-from collections import defaultdict
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from bench import config, judge
+from bench._paths import chunks, next_run_dir, select_prompts
 from bench.prompts import load_prompts
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s"
+)
 log = logging.getLogger("benchmark.sweep")
 
 OBJECTIVE = {"code", "numeric", "programmatic"}
 GEN_BUDGET_PER_WORKER = 10
-
-
-def next_dir() -> Path:
-    config.RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    existing = [int(p.name.split("-")[1]) for p in config.RESULTS_DIR.glob("sweep-*")
-                if p.name.split("-")[1].isdigit()]
-    n = (max(existing) + 1) if existing else 1
-    d = config.RESULTS_DIR / f"sweep-{n}"
-    d.mkdir()
-    return d
-
-
-def chunks(seq, size):
-    for i in range(0, len(seq), size):
-        yield seq[i:i + size]
 
 
 def main() -> int:
@@ -60,50 +48,80 @@ def main() -> int:
 
     config.ensure_hf_home()
     prompts = [p for p in load_prompts() if p.scoring in OBJECTIVE]
-    if args.limit_per_category:
-        seen: dict[str, int] = defaultdict(int)
-        sel = []
-        for p in prompts:
-            if seen[p.category] < args.limit_per_category:
-                sel.append(p); seen[p.category] += 1
-        prompts = sel
+    prompts = select_prompts(prompts, args.limit_per_category)
     pmap = {p.id: p for p in prompts}
 
-    out_dir = next_dir()
+    out_dir = next_run_dir("sweep")
     raw = out_dir / "raw.jsonl"
     raw.touch()
     ppw = max(1, GEN_BUDGET_PER_WORKER // max(1, args.trials))
-    log.info("sweep dir: %s  steps: %s  prompts: %d  prompts/worker: %d",
-             out_dir, args.steps, len(prompts), ppw)
+    log.info(
+        "sweep dir: %s  steps: %s  prompts: %d  prompts/worker: %d",
+        out_dir,
+        args.steps,
+        len(prompts),
+        ppw,
+    )
 
     env = dict(os.environ)
     failures: list[tuple] = []
     for steps in args.steps:
         for chunk in chunks(prompts, ppw):
             ids = ",".join(p.id for p in chunk)
-            cmd = [sys.executable, "-m", "bench.worker", "--model-key", "diffusion",
-                   "--prompt-ids", ids, "--trials", str(args.trials),
-                   "--max-tokens", str(args.max_tokens), "--denoising-steps", str(steps),
-                   "--out", str(raw)]
+            cmd = [
+                sys.executable,
+                "-m",
+                "bench.worker",
+                "--model-key",
+                "diffusion",
+                "--prompt-ids",
+                ids,
+                "--trials",
+                str(args.trials),
+                "--max-tokens",
+                str(args.max_tokens),
+                "--denoising-steps",
+                str(steps),
+                "--out",
+                str(raw),
+            ]
             log.info("worker: steps=%d [%s]", steps, ids)
             proc = subprocess.run(cmd, cwd=str(config.PROJECT_ROOT), env=env)
             if proc.returncode != 0:
                 failures.append((steps, ids, proc.returncode))
-                log.error("sweep worker failed (rc=%d) steps=%d [%s]", proc.returncode, steps, ids)
+                log.error(
+                    "sweep worker failed (rc=%d) steps=%d [%s]",
+                    proc.returncode,
+                    steps,
+                    ids,
+                )
     if failures:
-        raise RuntimeError(f"{len(failures)} worker(s) failed; aborting sweep to avoid partial metrics.")
+        raise RuntimeError(
+            f"{len(failures)} worker(s) failed; aborting sweep to avoid partial metrics."
+        )
 
     rows = [json.loads(l) for l in raw.read_text().splitlines() if l.strip()]
     by_step: dict[int, dict] = {}
     for steps in args.steps:
-        srows = [r for r in rows if r["phase"] == "timed" and r["requested_denoising_steps"] == steps]
+        srows = [
+            r
+            for r in rows
+            if r["phase"] == "timed" and r["requested_denoising_steps"] == steps
+        ]
         tput = [r["throughput_tps"] for r in srows if r["throughput_tps"] is not None]
         ttft = [r["ttft_s"] for r in srows if r["ttft_s"] is not None]
         used = [r["denoising_steps"] for r in srows if r["denoising_steps"] is not None]
         rep = {r["prompt_id"]: r["output_text"] for r in srows if r["trial"] == 0}
-        scores = [judge.score_objective(pmap[pid].category, pmap[pid].scoring,
-                                        out, pmap[pid].gold, pmap[pid].checks)["score"]
-                  for pid, out in rep.items()]
+        scores = [
+            judge.score_objective(
+                pmap[pid].category,
+                pmap[pid].scoring,
+                out,
+                pmap[pid].gold,
+                pmap[pid].checks,
+            )["score"]
+            for pid, out in rep.items()
+        ]
         by_step[steps] = {
             "throughput": sum(tput) / len(tput) if tput else 0,
             "ttft": sum(ttft) / len(ttft) if ttft else None,
@@ -111,17 +129,29 @@ def main() -> int:
             "denoising_steps_used": sum(used) / len(used) if used else None,
             "n_runs": len(tput),
         }
-        log.info("steps=%d -> %.1f tok/s, acc=%.2f", steps,
-                 by_step[steps]["throughput"], by_step[steps]["accuracy"])
+        log.info(
+            "steps=%d -> %.1f tok/s, acc=%.2f",
+            steps,
+            by_step[steps]["throughput"],
+            by_step[steps]["accuracy"],
+        )
 
-    payload = {"config": {"trials": args.trials, "max_tokens": args.max_tokens,
-                          "steps": args.steps, "model": config.MODELS["diffusion"]["id"],
-                          "n_prompts": len(prompts)},
-               "by_step": by_step}
+    payload = {
+        "config": {
+            "trials": args.trials,
+            "max_tokens": args.max_tokens,
+            "steps": args.steps,
+            "model": config.MODELS["diffusion"]["id"],
+            "n_prompts": len(prompts),
+        },
+        "by_step": by_step,
+    }
     (out_dir / "sweep.json").write_text(json.dumps(payload, indent=2))
     log.info("wrote %s", out_dir / "sweep.json")
     for s, d in by_step.items():
-        print(f"steps={s:>3}  {d['throughput']:7.1f} tok/s   acc={d['accuracy']*100:5.1f}%")
+        print(
+            f"steps={s:>3}  {d['throughput']:7.1f} tok/s   acc={d['accuracy'] * 100:5.1f}%"
+        )
     return 0
 
 
