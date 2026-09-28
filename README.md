@@ -116,14 +116,3 @@ run_benchmark.py / run_step_sweep.py / make_charts.py
 ## License
 
 MIT — see [LICENSE](LICENSE).
-
-<!-- archify:begin -->
-### System map
-
-![System map](docs/diagrams/diffusiongemma-benchmark.architecture.svg)
-
-Interactive: [`docs/diagrams/diffusiongemma-benchmark.architecture.html`](docs/diagrams/diffusiongemma-benchmark.architecture.html)
-— search nodes, trace routes, compare roles. Source of truth is the typed IR
-[`diffusiongemma-benchmark.architecture.json`](docs/diagrams/diffusiongemma-benchmark.architecture.json);
-edit that, never the HTML.
-<!-- archify:end -->
