@@ -5,6 +5,7 @@ numbers scattered across scripts. Model weights default to the external
 "AI Education" drive (the internal disk is nearly full) but HF_HOME is honored
 if already set in the environment.
 """
+
 from __future__ import annotations
 
 import os
@@ -48,15 +49,14 @@ MODELS = {
 
 # --- Generation settings (held constant across every timed run) --------------
 MAX_TOKENS = 512
-TEMPERATURE = 0.0          # deterministic for AR; diffusion still uses its EB schedule
+TEMPERATURE = 0.0  # deterministic for AR; diffusion still uses its EB schedule
 SEED = 42
-DIFFUSION_SAMPLER = "entropy-bound"   # mlx-vlm default; matches Google's model-card eval
-DENOISING_STEPS_DEFAULT = 48          # model-card evaluation setting
-STEP_SWEEP = [8, 16, 24, 48]          # the speed<->quality knob for run_step_sweep.py
+DIFFUSION_SAMPLER = "entropy-bound"  # mlx-vlm default; matches Google's model-card eval
+DENOISING_STEPS_DEFAULT = 48  # model-card evaluation setting
+STEP_SWEEP = [8, 16, 24, 48]  # the speed<->quality knob for run_step_sweep.py
 
 # --- Trial structure ---------------------------------------------------------
-WARMUP_RUNS = 2            # discarded (warms Metal kernels / caches)
-TIMED_TRIALS = 5          # measured; report mean +/- std
+TIMED_TRIALS = 5  # measured; report mean +/- std
 
 # --- Reference numbers for the "myth" chart (CITED, not measured here) -------
 # Source: Google DiffusionGemma blog / model card (NVIDIA H100 FP8, RTX 5090).
