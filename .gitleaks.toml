@@ -35,14 +35,19 @@ keywords = ["password", "passwd", "pwd", "secret", "apikey", "api_key", "token"]
 [[rules]]
 id = "internal-hostname"
 description = "Internal hostname or FQDN leaking into code"
-regex = '''(?i)\b[a-z0-9\-]+\.(ufl|shands|ufhealth)\.(edu|org)\b'''
+# Non-capturing (?:...), as in the kit (coderabbit-local-kit#56). gitleaks treats the
+# first capture group as the secret whenever one exists, so the capturing form made
+# --redact print "patient-db-server.REDACTED.edu": the hostname stayed in plaintext.
+regex = '''(?i)\b[a-z0-9\-]+\.(?:ufl|shands|ufhealth)\.(?:edu|org)\b'''
 tags = ["pii", "internal"]
 keywords = ["ufl.edu", "shands.org", "ufhealth.org", "shands.edu", "ufhealth.edu", "ufl.org"]
 
 [[rules]]
 id = "tailscale-authkey"
 description = "Tailscale auth key"
-regex = '''tskey-(auth|api|client)-[A-Za-z0-9\-]{10,}'''
+# Non-capturing (?:...), same defect: with the capturing group, --redact printed
+# "tskey-REDACTED-<key body>", masking the word "auth" and leaking the real key.
+regex = '''tskey-(?:auth|api|client)-[A-Za-z0-9\-]{10,}'''
 tags = ["key", "tailscale"]
 keywords = ["tskey-"]
 

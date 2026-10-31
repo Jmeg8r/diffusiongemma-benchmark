@@ -294,6 +294,53 @@ expect_clean "KNOWN GAP: tests/fixtures/ is skipped (this repo's allowlist paths
 ISOLATED=$(scan "$FIX" "$WORK/report-isolated.json" --enable-rule coderabbit-api-key) || exit 1
 expect_flagged "the custom coderabbit-api-key rule fires on its own" "$ISOLATED" "plain/probe.txt"
 
+# --- 2b. redaction of the two alternation rules ------------------------------
+#
+# internal-hostname and tailscale-authkey: NEITHER has secretGroup, and both once
+# had a capture group anyway -- (ufl|shands|ufhealth) and (auth|api|client) exist
+# only to alternate the PATTERN, but gitleaks defaults secretGroup to the first
+# capture group whenever one exists. Verified on 8.30.1 before the fix: --redact
+# turned "$REDACT_PROBE.ufl.edu" into "$REDACT_PROBE.REDACTED.edu" and
+# "tskey-auth-$REDACT_PROBE" into "tskey-REDACTED-$REDACT_PROBE" -- the metadata
+# word got masked, the sensitive value did not. Same fixtures and checks as the
+# kit (coderabbit-local-kit#56), in their own directory so no assertion above
+# changes. HOSTNAME_TLD is split out so this file's own source never contains a
+# whole internal-hostname match.
+REDACT_PROBE="Zq7Wm3Pl9Kx2Nb5Vt8Yr"
+RFIX="$WORK/redact-fixtures"
+mkdir -p "$RFIX/plain"
+HOSTNAME_TLD='ufl'
+printf 'internal_host = %s.%s.edu\n' "$REDACT_PROBE" "$HOSTNAME_TLD" > "$RFIX/plain/hostname.txt"
+printf 'TS_KEY=tskey-auth-%s\n' "$REDACT_PROBE"             > "$RFIX/plain/tskey.txt"
+scan "$RFIX" "$WORK/report-redacted.json" --redact >/dev/null || exit 1
+# grep's exit codes: 0 match, 1 no match, >1 ERROR. Only 1 is a pass.
+_g=0; grep -qF "$REDACT_PROBE" "$WORK/report-redacted.json" || _g=$?
+if [ "$_g" -eq 0 ]; then
+  fail "--redact report LEAKS the credential value (check the capture groups on internal-hostname and tailscale-authkey)"
+elif [ "$_g" -eq 1 ]; then
+  pass "--redact report does not contain the credential value"
+else
+  fail "could not inspect the redacted report (grep exit $_g) — this proves nothing"
+fi
+# WHICH RULE FIRED on WHICH fixture: a built-in rule matching the same text would
+# leave the probe check above green without testing these two rules at all.
+for _rule in internal-hostname tailscale-authkey; do
+  case "$_rule" in
+    internal-hostname) _rfile="plain/hostname.txt" ;;
+    tailscale-authkey) _rfile="plain/tskey.txt" ;;
+  esac
+  _n=$(python3 -c 'import json,sys
+try: d=json.load(open(sys.argv[3]))
+except Exception: print("ERR"); sys.exit(0)
+print(sum(1 for x in d if x.get("RuleID")==sys.argv[1] and x.get("File","").endswith(sys.argv[2])))' \
+    "$_rule" "$_rfile" "$WORK/report-redacted.json" 2>/dev/null || echo ERR)
+  case "$_n" in
+    ERR|"") fail "could not read RuleID '$_rule' from the report — this proves nothing" ;;
+    0)      fail "no finding on $_rfile carries RuleID '$_rule' — a different rule is doing this work" ;;
+    *)      pass "redaction fixture $_rfile is matched by RuleID '$_rule' ($_n finding(s))" ;;
+  esac
+done
+
 # --- 3. the invocation lefthook actually runs -------------------------------
 #
 # The assertions above scan a directory. The pre-commit gate scans the git INDEX, which
