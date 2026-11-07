@@ -74,13 +74,14 @@ snapshot_download('mlx-community/gemma-4-26b-a4b-it-8bit')"
 ## Run
 
 ```bash
-# Fast smoke validation (1 prompt/category, 1 trial, no judge)
+# Fast smoke validation (1 prompt/category, 1 trial, max_tokens 128, no judge)
 .venv/bin/python run_benchmark.py --quick
 
 # Full benchmark (5 trials, all 30 prompts, blind judge for writing)
 .venv/bin/python run_benchmark.py
 
-# Denoising-step sweep (speed<->quality knob)
+# Denoising-step sweep (speed<->quality knob; DiffusionGemma only,
+# objective prompts only, 3 trials per step setting)
 .venv/bin/python run_step_sweep.py
 
 # Render the article-ready PNG charts from the latest run + sweep
@@ -108,10 +109,18 @@ snapshot_download('mlx-community/gemma-4-26b-a4b-it-8bit')"
 ## Layout
 
 ```
-bench/        config, runner (mlx-vlm wrapper), metrics, prompts, judge, charts
+bench/        config, runner (mlx-vlm wrapper), worker (per-model subprocess),
+              metrics, prompts, judge, charts
 prompts/      prompts.yaml — 30 prompts across 4 categories
+charts/       committed PNG figures
+docs/diagrams/  Archify system map (typed IR, HTML, SVG)
+scripts/      gitleaks guard + binary-scan helpers used by lefthook.yml
 run_benchmark.py / run_step_sweep.py / make_charts.py
+requirements.txt / requirements.lock.txt   pinned dependencies
 ```
+
+Secret scanning runs locally via `lefthook.yml` and in CI via
+`.github/workflows/secret-scan.yml`.
 
 ## License
 
